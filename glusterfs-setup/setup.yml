@@ -1,0 +1,4 @@
+gluster:
+  brick: /var/bricks/brick
+  volume_name: gluster_test_vol
+  volume_mount_point: /vol/gluster_mount

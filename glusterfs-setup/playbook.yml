@@ -1,0 +1,49 @@
+--- 
+- hosts: all
+  user: vagrant
+  become: true
+  vars_files:
+    - "setup.yml"
+
+  tasks:
+  - name: Make sure hostnames match inventory
+    hostname: name="{{inventory_hostname}}"
+
+  - name: Apply template to /etc/hosts
+    template: src=hosts.j2 dest=/etc/hosts
+
+  - name: Add EPEL repository
+    yum: name=epel-release state=present
+
+  - name: Add Gluster repository
+    get_url: url=https://download.gluster.org/pub/gluster/glusterfs/3.7/LATEST/CentOS/glusterfs-epel.repo dest=/etc/yum.repos.d/glusterfs-epel.repo mode=0644
+
+  - name: Install glusterfs 
+    yum: >
+      name="{{item}}"
+      state=present
+    with_items:
+      - "glusterfs"
+      - "glusterfs-fuse" 
+      - "glusterfs-server"
+
+  - name: Enable and start glusterd
+    service: name=glusterd state=started enabled=yes
+ 
+  - name: Create bricks
+    file: path="{{ gluster.brick }}" state=directory mode=0755
+ 
+  - name: Probe for gluster peers
+    shell: gluster peer probe {{item}}
+    with_items: " {{groups['gluster']}} "
+
+  - name: Setup gluster volume
+    gluster_volume: state=present name="{{gluster.volume_name}}" bricks="{{gluster.brick}}" cluster="{{item}}" force=true
+    with_items: "{{groups['gluster']}}"  
+  
+  - name: Ensure gluster mount point exists
+    file: path="{{ gluster.volume_mount_point }}" state=directory mode=0755
+
+  - name: Add fstab entry for gluster volume
+    mount: name={{ gluster.volume_mount_point }} src={{inventory_hostname}}:/{{gluster.volume_name}} fstype=glusterfs state=present state=mounted
+       
